@@ -3,7 +3,6 @@ local cmp = require("cmp")
 local scan = require("plenary.scandir")
 
 local source = {}
-local added_folders = {}  -- Table to keep track of added folders (custom_samples produced duplicates for some reason)
 
 local default_option = {
     dirt_samples = utils.get_dirt_samples_path(),
@@ -24,8 +23,9 @@ source._validate_options = function(_, params)
     -- Ensure dirt_samples is an array or convert it to an array
     if type(opts.dirt_samples) == "string" then
         opts.dirt_samples = { opts.dirt_samples }
-    elseif type(opts.dirt_samples) ~= "table" then
-        opts.dirt_samples = {}
+    else
+        print("Warning: Unexpected value for opts.dirt_samples. Using default value.")
+        opts.dirt_samples = { utils.get_dirt_samples_path() }
     end
 
     -- Ensure custom_samples is an array or convert it to an array
@@ -49,6 +49,8 @@ source.complete = function(self, params, callback)
     local custom_samples = opts.custom_samples
 
     local folder_table = {}
+
+    local added_folders = {}  -- Table to keep track of added folders
 
     local function completePath(index, paths)
         if index <= #paths then
@@ -93,15 +95,14 @@ source.resolve = function(_, completion_item, callback)
 			end
 
 			-- Add documentation
-			local file_count = table.maxn(files_table)
-			local documentation_string = table.concat(files_table, "\n")
-			completion_item.documentation = {
-				kind = "markdown",
-				value = string.format("**Samples**: %s\n\n%s", file_count, documentation_string),
-			}
-
-			callback(completion_item)
-		end,
+      local file_count = #files_table
+      local documentation_string = table.concat(files_table, "\n")
+      completion_item.documentation = {
+        kind = "markdown",
+        value = string.format("**Samples**: %s\n\n%s", file_count, documentation_string),
+      }
+          callback(completion_item)
+      end,
 	})
 end
 

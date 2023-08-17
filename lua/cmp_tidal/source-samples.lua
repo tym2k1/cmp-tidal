@@ -52,58 +52,67 @@ source.complete = function(self, params, callback)
 
     local added_folders = {}  -- Table to keep track of added folders
 
-    local function completePath(index, paths)
+    local function completePath(index, paths, source_type)
         if index <= #paths then
             local current_path = paths[index]
             if not added_folders[current_path] then
                 added_folders[current_path] = true
-
                 scan.scan_dir_async(current_path, {
                     depth = 1,
                     only_dirs = true,
                     on_exit = function(folders)
                         for _, folder in ipairs(folders) do
                             local folder_name = folder:match("^.+/(.+)$")
-                            local folder_item = { label = folder_name, kind = cmp.lsp.CompletionItemKind.Folder, path = folder }
+                            local folder_item = {
+                                label = folder_name,
+                                kind = cmp.lsp.CompletionItemKind.Folder,
+                                path = folder,
+                                source_type = source_type,  -- Set the source type flag
+                            }
                             table.insert(folder_table, folder_item)
                         end
 
-                        completePath(index + 1, paths)
+                        completePath(index + 1, paths, source_type)
                     end,
                 })
             else
-                completePath(index + 1, paths)
+                completePath(index + 1, paths, source_type)
             end
         else
-            callback({ items = folder_table, isIncomplete = true })
+            callback({ items = folder_table, isIncomplete = true })  -- Send the results if folder_table is not empty
         end
     end
 
-    completePath(1, vim.list_extend(dirt_samples, custom_samples))
+    completePath(1, custom_samples, "Custom Samples")  -- Set source type for custom samples
+    completePath(1, dirt_samples, "Dirt Samples")      -- Set source type for dirt samples
 end
 
--- List files of selected folder in documentation
 source.resolve = function(_, completion_item, callback)
-	scan.scan_dir_async(completion_item.path, {
-		depth = 1,
-		search_pattern = { "%.wav$", "%.WAV$", "%.flac$", "%.FLAC$", "%.aiff$", "%.AIFF$" },
-		on_exit = function(files)
-			local files_table = {}
-			for index, file in ipairs(files) do
-				local file_name = file:match("^.+/(.+)$")
-				table.insert(files_table, string.format("**:%s ::** %s", index, file_name))
-			end
+    local path = completion_item.path
+    local source_type = completion_item.source_type
+    
+    scan.scan_dir_async(path, {
+        depth = 1,
+        search_pattern = { "%.wav$", "%.WAV$", "%.flac$", "%.FLAC$", "%.aiff$", "%.AIFF$" },
+        on_exit = function(files)
+            local files_table = {}
+            for index, file in ipairs(files) do
+                local file_name = file:match("^.+/(.+)$")
+                table.insert(files_table, string.format("**:%s ::** %s", index, file_name))
+            end
 
-			-- Add documentation
-      local file_count = #files_table
-      local documentation_string = table.concat(files_table, "\n")
-      completion_item.documentation = {
-        kind = "markdown",
-        value = string.format("**Samples**: %s\n\n%s", file_count, documentation_string),
-      }
-          callback(completion_item)
-      end,
-	})
+            -- Add documentation
+            local file_count = #files_table
+            local documentation_string = table.concat(files_table, "\n")
+            local source_label = source_type or "Samples"
+            completion_item.documentation = {
+                kind = "markdown",
+                value = string.format("**%s**: %s\n\n%s", source_label, file_count, documentation_string),
+            }
+            
+            callback(completion_item)
+        end,
+    })
 end
 
 return source
